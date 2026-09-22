@@ -1,0 +1,7 @@
+sounddevice
+numpy
+webrtcvad-wheels
+websockets>=14
+openai>=1.40
+python-dotenv
+pymongo
