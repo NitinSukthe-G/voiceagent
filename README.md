@@ -75,7 +75,7 @@ Priya  Your appointment is confirmed. Please come fifteen minutes early. Take ca
 ### Install
 
 ```bash
-git clone https://github.com/<your-username>/voice-agent.git
+git clone https://github.com/NitinSukthe-G/voiceagent.git
 cd voice-agent
 
 python -m venv venv
