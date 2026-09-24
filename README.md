@@ -260,10 +260,8 @@ The numbers worth knowing, all in [`config.py`](config.py):
 
 ## Documentation
 
-- **[`notes.md`](notes.md)** — the full technical write-up: every file explained,
-  one conversation traced end to end, the hard problems, ten real bugs with how
-  each was diagnosed, and a glossary
-- **[`latency.md`](latency.md)** — measurements, what was tried, where the floor is
+[`latency.md`](latency.md) — the measurements behind the numbers above: what was
+tried, what did not help, and where the floor is.
 
 ---
 
