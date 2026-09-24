@@ -13,10 +13,10 @@ import llm
 from audio_io import Mic, Player
 from latency import LatencyLog
 from transcript import Transcript
-from prompt import (OPENING, EMERGENCY_LINE,
-                    build_prompt, is_emergency)
+from prompt import (OPENING, EMERGENCY_LINE, DESK_GREETING,
+                    build_desk_prompt, build_prompt, is_emergency)
 from stt import SarvamSTT
-from tools import TOOLS, run_tool
+from tools import TOOLS, alert_emergency, run_tool
 from tts import SarvamTTS
 from vad import TurnDetector
 
@@ -43,6 +43,7 @@ class Agent:
         self.transcript = None    # opened in setup()
         self.filler_done = False  # one filler per turn
         self.acked = False        # one ack per turn, even if it arrives in pieces
+        self.mode = "priya"       # "desk" after an emergency handoff
 
     # ---------- main loop: mic -> VAD -> STT ----------
 
@@ -89,19 +90,49 @@ class Agent:
         """Fixed lines are synthesized once and kept in the database as PCM,
         so the opening, the emergency line and the tool filler play instantly."""
         col = db.connect().phrases
-        for text in (OPENING, EMERGENCY_LINE, config.ACK, config.FILLER):
+        wanted = [(t, config.TTS_VOICE)
+                  for t in (OPENING, EMERGENCY_LINE, config.ACK, config.FILLER)]
+        wanted.append((DESK_GREETING, config.DESK_VOICE))
+        for text, voice in wanted:
             if not text:
                 continue
-            key = f"{config.TTS_VOICE}|{text}"
+            key = f"{voice}|{text}"
             doc = await asyncio.to_thread(col.find_one, {"key": key})
-            if doc is None:
-                pcm = await self.tts.render(text)
-                await asyncio.to_thread(col.insert_one, {
-                    "key": key, "voice": config.TTS_VOICE, "text": text,
-                    "pcm": Binary(pcm)})
-                self.phrases[text] = pcm
-            else:
+            if doc is not None:
                 self.phrases[text] = bytes(doc["pcm"])
+                continue
+            # render in the right voice: a second socket for anything that is
+            # not Priya, so her live connection keeps its own speaker
+            if voice == self.tts.speaker:
+                pcm = await self.tts.render(text)
+            else:
+                other = SarvamTTS(self.player, speaker=voice)
+                await other.connect()
+                pcm = await other.render(text)
+                await other.close()
+            await asyncio.to_thread(col.insert_one, {
+                "key": key, "voice": voice, "text": text, "pcm": Binary(pcm)})
+            self.phrases[text] = pcm
+
+    async def handoff(self, turn):
+        """Hand the caller to the emergency desk: new voice, new brain.
+
+        There is no telephony here, so nothing goes down a phone line. What
+        changes is who the caller is talking to - a different voice and a
+        different system prompt, with the history carried over so they are
+        not made to repeat themselves.
+        """
+        self.mode = "desk"
+        print(f"\n[handoff] booking -> emergency desk")
+        self.transcript.note("handoff: booking -> emergency desk")
+        try:
+            self.tts.speaker = config.DESK_VOICE
+            await self.tts.reset()
+        except Exception as e:
+            # the greeting still plays, just in the old voice; being triaged
+            # matters more than sounding like a different person
+            print(f"[handoff] voice switch failed: {e}")
+        await self.say_cached(DESK_GREETING, turn)
 
     async def say_cached(self, text, turn, mark=None, record=True):
         """Play a pre-synthesized phrase straight into the player.
@@ -216,8 +247,14 @@ class Agent:
         self.filler_done = False
 
         try:
-            if is_emergency(text):
+            if is_emergency(text) and self.mode == "priya":
+                # speak first, escalate second: the caller hears the
+                # instruction in ~0.8 s and the write happens behind it
                 await self.say_cached(EMERGENCY_LINE, turn, "playback_start")
+                ref = await asyncio.to_thread(alert_emergency, text)
+                print(f"\n[emergency] escalation logged: {ref}")
+                self.transcript.note(f"emergency escalated: {ref}")
+                await self.handoff(turn)
             else:
                 if config.ACK and not self.acked:
                     # instant, from cache: the caller hears something now,
@@ -234,7 +271,7 @@ class Agent:
             await self.speak("Sorry, can you say that again?", turn)
         finally:
             if self.spoken:
-                self.transcript.priya(self.spoken.strip())
+                self.transcript.priya(self.spoken.strip(), self.mode)
                 self.history.append(
                     {"role": "assistant", "content": self.spoken.strip()}
                 )
@@ -260,16 +297,19 @@ class Agent:
     async def think_and_speak(self, turn):
         # rebuilt per turn: it embeds NOW and a 15 day calendar, which go
         # stale in a long session and break "tomorrow" / "next Friday"
-        messages = [{"role": "system", "content": build_prompt()}]
+        desk = self.mode == "desk"
+        system = build_desk_prompt() if desk else build_prompt()
+        tools = None if desk else TOOLS          # the desk cannot book
+        messages = [{"role": "system", "content": system}]
         messages += self.history
-        print("Priya: ", end="", flush=True)
+        print("Desk : " if desk else "Priya: ", end="", flush=True)
 
         for _ in range(4):          # max 4 tool rounds
             buf = ""
             text_this_round = ""
             calls = None
 
-            async for kind, value in llm.stream_reply(messages, TOOLS):
+            async for kind, value in llm.stream_reply(messages, tools):
                 if kind == "text":
                     turn.mark("llm_first_token")
                     print(value, end="", flush=True)

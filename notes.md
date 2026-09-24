@@ -173,6 +173,7 @@ voice-agent/
 ├── bookings            every booking; the source of truth
 ├── appointments        one event per booking action
 ├── conversations       one document per session, lines pushed live
+├── emergencies         one document per escalation
 ├── phrases             fixed lines as PCM audio
 │
 │   CONFIG AND DOCS
@@ -398,6 +399,8 @@ misconfiguration shows up at startup rather than mid-call.
 | `bookings` | One document per booking, with `booked_at`. The source of truth. |
 | `appointments` | One document per event — `BOOKED`, `RESCHEDULED`, `CANCELLED` — with a timestamp, the booking id and a readable detail line. |
 | `conversations` | One document per session: `started`, `ended`, a `lines` array of `{at, who, text}` and a `turns` array of latency marks. |
+| `emergencies` | One document per escalation: a reference like `ES4417`, the timestamp, what the caller said, and `status`. The emergency desk works from this. |
+| `phrases` | Also holds the desk greeting, cached in the **desk's** voice — the key is `voice|text`, so two agents share one collection. |
 | `phrases` | The opening line, emergency line and filler as PCM audio, keyed by voice and text. Built on first run. |
 
 ---
@@ -604,6 +607,48 @@ few more are matched by a plain keyword scan before the LLM runs. It is dumber
 than the model, but it cannot be talked out of it, and for "my father has chest
 pain" that is exactly the property you want. The response is pre-synthesized
 and plays in about 0.8 seconds.
+
+### The handoff
+
+Priya does not answer an emergency herself. She says she is connecting the
+caller, and the session is handed to a second agent — the **emergency desk**:
+
+| | Priya | Desk |
+| --- | --- | --- |
+| Voice | `priya` | `aditya` — audibly a different person |
+| Prompt | `build_prompt()` | `build_desk_prompt()` |
+| Tools | all six | **none** |
+| Job | booking | triage |
+
+Three things change together, held in `self.mode`. The voice switch works
+because `SarvamTTS` reads `self.speaker` at connect time, so setting it and
+calling `reset()` reconnects in the new voice — about 200 ms, hidden behind the
+handoff line still playing. The conversation history carries over, so the
+caller is not made to repeat "my father has chest pain" to the person they were
+just transferred to. That is what makes it a *warm* transfer.
+
+**There is no telephony in this project, so no phone call is transferred.** This
+is an in-session agent handoff, which is what "transfer" means inside a voice
+platform without a phone line. `alert_emergency()` also writes a record to the
+`emergencies` collection — a reference, the timestamp, what was said — which is
+what a real emergency desk would work from.
+
+The desk's greeting leads with the ambulance: *"If you have not called one zero
+eight, do that now."* Waiting on a handoff is slower than an ambulance, so the
+number is said within six seconds of the caller reporting the emergency, before
+anything else is asked.
+
+Two guards worth knowing: the emergency branch checks `self.mode == "priya"`, so
+saying "chest pain" again on the desk does not escalate a second time; and
+`is_emergency` still runs before the language model in both modes, because a
+keyword scan cannot be talked out of it.
+
+One bug found while testing this: asked for the reception number, the desk said
+*"zero four zero double zero double zero one two three four"* — the wrong
+number. The model mangles digit groups when it has to convert them itself, so
+`spoken()` in `prompt.py` now renders phone numbers as words and the prompt
+carries the spoken form. A hospital agent giving out a wrong number is worse
+than one that sounds clumsy.
 
 ---
 

@@ -32,6 +32,22 @@ def record(event, booking_id, detail=""):
     })
 
 
+def alert_emergency(said, phone=None, name=None):
+    """Escalate to the emergency team and return the reference.
+
+    There is no telephony here, so this cannot transfer a call. What it does
+    is real: it writes an escalation the emergency desk would work from, with
+    what the caller said and when. The caller is told to dial 108 as well,
+    because waiting on a handoff is slower than an ambulance.
+    """
+    ref = f"ES{random.randint(1000, 9999)}"
+    _db.emergencies.insert_one({
+        "ref": ref, "at": datetime.now(), "said": said,
+        "phone": phone, "name": name, "status": "ALERTED",
+    })
+    return ref
+
+
 def describe(b):
     day = DAYS[datetime.strptime(b["date"], "%Y-%m-%d").weekday()]
     return (f"{b['name']} ({b['age']})  {b['phone']}  {b['doctor']}, "

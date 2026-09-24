@@ -24,8 +24,10 @@ FLOOR_FRAMES = 150    # 3 s
 FLOOR_RATIO = 4
 START_MS = 120        # this much speech = user started. 200 missed short words
                       # like hi and ok; a keystroke is still under 6 frames.
-SILENCE_MS = 450      # this much silence = user finished (natural
-                      # phrase pauses run to ~450 ms; lower fragments them)
+SILENCE_MS = 700      # this much silence = user finished. 450 was tuned
+                      # against synthesized speech and cut real speakers off
+                      # mid-sentence; people pause longer when thinking.
+                      # Costs ~250 ms per turn. Lower it if replies feel slow.
 PREROLL_MS = 300      # audio kept from just before speech
 
 # ---- speakers (no headphones) ----
@@ -33,7 +35,9 @@ PREROLL_MS = 300      # audio kept from just before speech
 # but short; a real interruption is loud AND sustained. While Priya talks,
 # a barge-in must clear BARGE_RMS for BARGE_START_MS in a row.
 SPEAKERS = None       # None = detect from the output device name
-BARGE_RMS = 800
+BARGE_RMS = 1600     # measured: echo p90 is ~1500 at a normal volume;
+                     # 800 let one false barge-in through. Lower it toward
+                     # 1200 if interrupting takes too much effort.
 BARGE_START_MS = 300
 ECHO_TAIL_MS = 400    # echo keeps arriving this long after our buffer empties
 
@@ -49,6 +53,9 @@ STT_SHORT_TURN_S = 1.0      # turns shorter than this wait less for the stream
 LLM_MODEL = "sarvam-105b-conversations"
 TTS_MODEL = "bulbul:v3"
 TTS_VOICE = "priya"
+# The emergency desk answers in a different voice, so the caller can hear
+# that the call was handed to someone else.
+DESK_VOICE = "aditya"
 TTS_LANG = "en-IN"
 
 # ---- conversation ----

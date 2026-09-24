@@ -4,11 +4,17 @@ from tools import DEPARTMENTS, DOCTORS, H
 OPENING = ("Hello, this is Priya from Nova Suraksha Hospital. "
            "How can I help you today?")
 
+# Priya says this, then the call is handed to the emergency desk. It is a
+# bridge, deliberately short - the desk delivers the substance.
 EMERGENCY_LINE = (
-    "This sounds like an emergency. Please call one zero eight, "
-    "or our emergency line zero four zero, four zero zero zero, "
-    "nine nine nine nine, right away. Our emergency ward is open "
-    "twenty four hours."
+    "This sounds like an emergency. I am connecting you to our emergency "
+    "team right now. Stay on the line."
+)
+
+# The desk picks up in its own voice.
+DESK_GREETING = (
+    "Emergency desk, Aditya speaking. If you have not called one zero eight "
+    "for an ambulance, do that now. Then tell me what is happening."
 )
 
 EMERGENCY_WORDS = [
@@ -17,6 +23,21 @@ EMERGENCY_WORDS = [
     "unconscious", "fainted", "accident", "heart attack",
     "stroke", "seizure", "poison",
 ]
+
+
+DIGITS = {"0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
+          "5": "five", "6": "six", "7": "seven", "8": "eight", "9": "nine"}
+
+
+def spoken(number):
+    """040 4000 1234 -> 'zero four zero, four zero zero zero, one two three four'
+
+    The model mangles digit groups when left to convert them itself (4000
+    came out as 'double zero double zero'), and a wrong hospital number is
+    worse than a clumsy one. So the prompt carries the spoken form.
+    """
+    return ", ".join(" ".join(DIGITS[c] for c in group if c in DIGITS)
+                     for group in str(number).split())
 
 
 def is_emergency(text):
@@ -47,7 +68,7 @@ HOSPITAL
 Address: {H['address']}. Parking free in basement.
 OPD Monday to Saturday 9 AM to 8 PM. Lunch 1 to 2 PM, no appointments.
 Sunday OPD closed, emergency open 24 hours.
-Reception {H['reception']}. Emergency {H['emergency']}.
+Reception {spoken(H['reception'])}. Emergency {spoken(H['emergency'])}.
 Payment at reception only: cash, UPI, cards.
 Slots are 15 minutes. Follow-up within 7 days with the same doctor is free.
 Come 15 minutes early. Cancel or reschedule up to 2 hours before.
@@ -111,4 +132,39 @@ area you're looking for, or shall I start with general medicine?
 Caller: I have knee pain
 Priya: Ah, for knee pain you'd want Orthopedics. That's Doctor Farhan Ali, and he's \
 in on Tuesday, Thursday and Saturday afternoons. Shall I check what's free?
+"""
+
+
+def build_desk_prompt():
+    """The emergency desk. Triage only - this agent cannot book anything."""
+    now = datetime.now()
+    return f"""You are Aditya on the emergency desk at Nova Suraksha \
+Multispeciality Hospital. A call has just been transferred to you because the \
+caller reported an emergency. You have their alert in front of you.
+
+NOW: {now:%A %Y-%m-%d %H:%M}
+Emergency ward: open 24 hours, {H['address']}.
+Emergency line: say it as {spoken(H['emergency'])}. Ambulance: one zero eight.
+
+YOUR JOB
+Find out fast what is happening and get them moving. In your first reply, if \
+they have not already said, ask the one thing that matters most: is the person \
+conscious and breathing.
+Then get them to act: call one zero eight for an ambulance, or bring the person \
+straight to our emergency ward. Say the ward is open and ready.
+Ask their age and what happened only if it does not slow anything down.
+If they sound panicked, tell them help is coming and keep them talking.
+
+NEVER
+Never diagnose. Never name a medicine or a dose. Never suggest a home remedy.
+Never book, reschedule or discuss appointments - you are not the booking desk. \
+If they ask about an appointment, tell them the emergency comes first and they \
+can call reception, say it as {spoken(H['reception'])}, afterwards.
+Never say you are an AI or mention systems, records or references.
+
+VOICE STYLE
+You are calm, direct and human. Short sentences. One instruction at a time.
+Use contractions. No lists, no markdown, no emojis, no symbols.
+Say numbers as words: one zero eight, not 108.
+Reply in the caller's language.
 """

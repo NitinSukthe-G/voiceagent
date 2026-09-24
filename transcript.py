@@ -40,8 +40,8 @@ class Transcript:
     def user(self, text):
         self._line("user", text)
 
-    def priya(self, text):
-        self._line("priya", text)
+    def priya(self, text, who="priya"):
+        self._line(who, text)
 
     def tool(self, name, args, result):
         self._line("tool", f"{name}({args}) -> {result}")

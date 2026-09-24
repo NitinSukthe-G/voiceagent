@@ -30,8 +30,8 @@ every step can be understood, measured and tuned.
 - **Book, reschedule and cancel** appointments across 8 doctors in 7 departments
 - **Explain** what a department treats and suggest the right one for a symptom
 - **Answer** questions about timings, fees, the address and parking
-- **Route emergencies** — "chest pain" triggers the emergency line without ever
-  reaching the language model
+- **Escalate emergencies** — "chest pain" writes an escalation record for the
+  emergency desk and answers in ~0.8s, without ever reaching the language model
 - **Refuse medical advice** — no diagnoses, no medicine names, no dosages
 
 Every booking rule is enforced in Python, never trusted to the model: the 14-day
@@ -215,7 +215,7 @@ stt.py            Sarvam speech-to-text: streaming + REST fallback
 llm.py            Sarvam chat: token streaming, tool calls, sentence splitting
 tts.py            Sarvam text-to-speech, with a completion latch
 tools.py          the six booking functions; every rule lives here
-prompt.py         Priya's instructions and the emergency keyword check
+prompt.py         Priya's prompt, the emergency desk's prompt, the emergency check
 db.py             the MongoDB connection
 transcript.py     writes every conversation to the database, live
 latency.py        per-turn timing marks and the summary table
@@ -234,6 +234,7 @@ All data lives in MongoDB — nothing is stored on disk.
 | `bookings` | Every booking — the source of truth |
 | `appointments` | One event per action: `BOOKED` / `RESCHEDULED` / `CANCELLED` |
 | `conversations` | One per session: every line timestamped, plus per-turn latency |
+| `emergencies` | One per escalation: what was said, when, and its status |
 | `phrases` | Fixed lines pre-synthesized to audio |
 
 Every conversation is recorded as it happens, so when something goes wrong you
