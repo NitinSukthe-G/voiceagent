@@ -276,10 +276,3 @@ tried, what did not help, and where the floor is.
 - **The language model is the latency floor** at ~950 ms to first token. Sarvam
   currently offers one usable conversational model.
 
----
-
-## Built as a learning project
-
-The goal was to understand how a voice agent works from the inside — which is
-why there is no framework, why every stage has its own latency mark, and why the
-measurements in `latency.md` include the things that turned out *not* to help.
